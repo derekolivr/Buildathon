@@ -1,9 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { createClient } from "@/lib/supabase";
 import {
   LayoutDashboard,
   FileText,
@@ -50,13 +49,16 @@ const navItems = [
 
 export function Sidebar() {
   const pathname = usePathname();
-  const router = useRouter();
-  const supabase = createClient();
 
   const handleSignOut = async () => {
-    await supabase.auth.signOut();
-    router.push("/login");
-    router.refresh();
+    try {
+      await fetch("/auth/signout", { method: "POST" });
+      window.location.href = "/login"; // hard redirect to login
+    } catch (error) {
+      console.error("Error signing out:", error);
+      // If there's an error, still try to redirect
+      window.location.href = "/login";
+    }
   };
 
   return (

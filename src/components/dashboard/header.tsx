@@ -1,7 +1,5 @@
 "use client";
 
-import { createClient } from "@/lib/supabase";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -18,13 +16,15 @@ import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Sidebar } from "./sidebar";
 
 export function Header() {
-  const router = useRouter();
-  const supabase = createClient();
-
   const handleSignOut = async () => {
-    await supabase.auth.signOut();
-    router.push("/login");
-    router.refresh();
+    try {
+      await fetch("/auth/signout", { method: "POST" });
+      window.location.href = "/login"; // hard redirect to login
+    } catch (error) {
+      console.error("Error signing out:", error);
+      // If there's an error, still try to redirect
+      window.location.href = "/login";
+    }
   };
 
   return (
