@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
+import { createClient } from "@/lib/supabase";
 import {
   LayoutDashboard,
   FileText,
@@ -49,6 +50,14 @@ const navItems = [
 
 export function Sidebar() {
   const pathname = usePathname();
+  const router = useRouter();
+  const supabase = createClient();
+
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+    router.push("/login");
+    router.refresh();
+  };
 
   return (
     <div className="hidden md:flex flex-col w-64 bg-card border-r h-screen">
@@ -83,7 +92,10 @@ export function Sidebar() {
             <Settings className="h-4 w-4" />
             Settings
           </Link>
-          <button className="w-full flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors mt-1">
+          <button
+            onClick={handleSignOut}
+            className="w-full flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors mt-1"
+          >
             <LogOut className="h-4 w-4" />
             Sign out
           </button>
