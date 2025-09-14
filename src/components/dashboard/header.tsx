@@ -14,8 +14,10 @@ import {
 import { Bell, Menu } from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Sidebar } from "./sidebar";
+import { useNotifications } from "./notifications";
 
 export function Header() {
+  const { unreadCount, markAllRead } = useNotifications();
   const handleSignOut = async () => {
     try {
       await fetch("/auth/signout", { method: "POST" });
@@ -44,9 +46,19 @@ export function Header() {
         <h1 className="text-lg font-semibold md:text-xl">Dashboard</h1>
       </div>
       <div className="flex items-center gap-2">
-        <Button variant="outline" size="icon" className="relative">
+        <Button
+          variant="outline"
+          size="icon"
+          className="relative"
+          onClick={markAllRead}
+          aria-label={unreadCount > 0 ? `${unreadCount} unread notifications` : "Notifications"}
+        >
           <Bell className="h-5 w-5" />
-          <span className="absolute right-1 top-1 flex h-2 w-2 rounded-full bg-primary" />
+          {unreadCount > 0 ? (
+            <span className="absolute -right-1 -top-1 inline-flex min-h-[1rem] min-w-[1rem] items-center justify-center rounded-full bg-primary px-1 text-[10px] leading-none text-primary-foreground">
+              {unreadCount}
+            </span>
+          ) : null}
           <span className="sr-only">Notifications</span>
         </Button>
         <DropdownMenu>

@@ -41,6 +41,12 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJ...
 DOCUMENT_EXTRACT_URL=https://your-endpoint.example.com/extract
 # Optional bearer for your extractor; leave empty to disable
 DOCUMENT_EXTRACT_BEARER=
+
+# Optional: external PDF form filler used by /api/autofill
+# POST { file: <pdf> } → returns a filled PDF (application/pdf)
+DOCUMENT_FILL_URL=https://your-endpoint.example.com/fill
+# Optional bearer for your filler; leave empty to disable
+DOCUMENT_FILL_BEARER=
 ```
 
 3. Database schema (run in Supabase SQL editor for the SAME project as your env)
@@ -180,7 +186,13 @@ If `DOCUMENT_EXTRACT_URL` is not set, the API uses mock fields to keep the demo 
 - `DELETE /api/clients?id=...` → delete
 - `GET /api/documents?client_id=...` → list client documents
 - `POST /api/documents` → upload file (multipart) `{ file, client_id }`
-- `POST /api/autofill` → mock document autofill (updates `extracted_fields`)
+- `POST /api/autofill` → document autofill; if `DOCUMENT_FILL_URL` set, forwards file to filler
+  - Accepts filler responses:
+    - application/pdf → stored to Storage; `autofilled_url` updated
+    - application/json → may include any of:
+      - `pdf_base64` or `pdf` (base64 string) → stored; `autofilled_url` updated
+      - `pdf_url` (direct URL) → fetched and stored; `autofilled_url` updated
+      - `extracted_fields` (object) or `fields` (object) or `matched_fields` (array of `{ pdf_field, value }`) → merged into `extracted_fields`
 - `POST /api/ingest` → forward file to `DOCUMENT_EXTRACT_URL`, upsert client, save document
 - `GET /api/activity` → latest activity rows for current user
 

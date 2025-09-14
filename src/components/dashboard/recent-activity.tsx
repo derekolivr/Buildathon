@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useNotifications } from "./notifications";
 
 type Activity = {
   id: string;
@@ -13,6 +14,7 @@ type Activity = {
 
 export function RecentActivity() {
   const [rows, setRows] = useState<Activity[]>([]);
+  const { addItems } = useNotifications();
 
   useEffect(() => {
     const load = async () => {
@@ -21,6 +23,7 @@ export function RecentActivity() {
         if (!res.ok) return;
         const data = (await res.json()) as Activity[];
         setRows(data ?? []);
+        addItems(data ?? []);
       } catch (e) {
         // ignore
       }

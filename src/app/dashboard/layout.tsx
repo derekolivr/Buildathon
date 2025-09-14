@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { Sidebar } from "@/components/dashboard/sidebar";
-import { Header } from "@/components/dashboard/header";
+import DashboardClientShell from "./client-shell";
 
 export const metadata: Metadata = {
   title: "Dashboard | Micro-Entrepreneur Suite",
@@ -16,8 +16,7 @@ export default function DashboardLayout({
     <div className="flex h-screen overflow-hidden">
       <Sidebar />
       <div className="flex flex-col flex-1 overflow-hidden">
-        <Header />
-        <main className="flex-1 overflow-auto p-6">{children}</main>
+        <DashboardClientShell>{children}</DashboardClientShell>
       </div>
     </div>
   );
