@@ -2,6 +2,9 @@
 
 # Currently takes manual biodata but you can change it to take data from the csv or sql db file outputed by the document processor code
 
+# Fixed font size autofiller
+
+
 import requests
 import json
 import base64
@@ -11,6 +14,9 @@ from pdf2image import convert_from_path
 from PIL import Image, ImageDraw, ImageFont
 import pytesseract
 from typing import List, Dict, Tuple, Any
+import urllib.request
+import platform
+
 
 # --- Groq API Config ---
 GROQ_API_KEY = "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"
@@ -26,7 +32,7 @@ class SimplePDFAutoFillSystem:
 
     def extract_text_from_pdf(self, pdf_path: str) -> str:
         """Extract text from PDF using OCR"""
-        pages = convert_from_path(pdf_path, dpi=200)
+        pages = convert_from_path(pdf_path, dpi=1200)
         full_text = ""
         for page in pages:
             text = pytesseract.image_to_string(page)
@@ -241,37 +247,89 @@ class SimplePDFAutoFillSystem:
             "unused_biodata_fields": []
         }
 
-    def simple_autofill_with_pil(self, input_pdf: str, output_pdf: str, matched_data: Dict[str, Any]) -> str:
+    def get_font(self, size=22):
         """
-        Simple autofill that finds exact keywords from JSON and fills next to them
-        Now handles field name variations including colons
+        Get font with optimized size 22 as standard
         """
+        print(f"Loading font with size: {size}")
+        
+        # System font paths to try (most likely to exist)
+        system_fonts = [
+            # Windows fonts
+            "C:/Windows/Fonts/arial.ttf",
+            "C:/Windows/Fonts/calibri.ttf", 
+            "C:/Windows/Fonts/times.ttf",
+            "C:/Windows/Fonts/verdana.ttf",
+            # macOS fonts
+            "/System/Library/Fonts/Arial.ttf",
+            "/System/Library/Fonts/Times.ttc",
+            "/System/Library/Fonts/Helvetica.ttc",
+            "/Library/Fonts/Arial.ttf",
+            # Linux fonts
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+            "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+            "/usr/share/fonts/TTF/DejaVuSans.ttf",
+            "/usr/share/fonts/truetype/ubuntu/Ubuntu-R.ttf",
+        ]
+        
+        # Try system fonts first
+        for font_path in system_fonts:
+            if os.path.exists(font_path):
+                try:
+                    font = ImageFont.truetype(font_path, size)
+                    test_bbox = font.getbbox("Test")
+                    test_height = test_bbox[3] - test_bbox[1]
+                    print(f"Successfully loaded system font: {font_path}")
+                    return font
+                except Exception as e:
+                    continue
+        
+        # Try to download Roboto font if system fonts aren't available
+        roboto_path = "roboto.ttf"
+        if not os.path.exists(roboto_path):
+            try:
+                print("Downloading Roboto font...")
+                urllib.request.urlretrieve(
+                    "https://github.com/googlefonts/roboto/raw/main/src/hinted/Roboto-Regular.ttf", 
+                    roboto_path
+                )
+                print("Roboto font downloaded successfully")
+            except Exception as e:
+                print(f"Failed to download Roboto font: {e}")
+        
+        if os.path.exists(roboto_path):
+            try:
+                font = ImageFont.truetype(roboto_path, size)
+                print("Successfully loaded downloaded Roboto font")
+                return font
+            except Exception as e:
+                print(f"Failed to load downloaded font: {e}")
+        
+        # Use default font as last resort
+        print("Using default font")
+        try:
+            return ImageFont.load_default()
+        except Exception as e:
+            print(f"Even default font failed: {e}")
+            return ImageFont.load_default()
 
+    def simple_autofill_with_pil(self, input_pdf: str, output_pdf: str, matched_data: Dict[str, Any], font_size: int = 22, use_high_dpi: bool = False) -> str:
+        """
+        Simple autofill with standard font size 22
+        """
         matched_fields = matched_data.get('matched_fields', [])
         if not matched_fields:
             print("No matched fields found")
             return output_pdf
 
-        # Convert PDF to images
-        pages = convert_from_path(input_pdf, dpi=200)
+        # Convert PDF to images with optional high DPI
+        dpi = 400 if use_high_dpi else 200
+        print(f"Converting PDF to images at {dpi} DPI...")
+        pages = convert_from_path(input_pdf, dpi=dpi)
 
-        # Setup font
-        font = None
-        font_paths = [
-            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-            "/System/Library/Fonts/Arial.ttf",
-            "C:/Windows/Fonts/arial.ttf"
-        ]
-
-        for font_path in font_paths:
-            try:
-                font = ImageFont.truetype(font_path, 22)
-                break
-            except:
-                continue
-
-        if not font:
-            font = ImageFont.load_default()
+        # Get font with standard size 22
+        font = self.get_font(font_size)
+        print(f"Using font size: {font_size}")
 
         filled_pages = []
         total_filled = 0
@@ -281,13 +339,6 @@ class SimplePDFAutoFillSystem:
 
             # Get OCR data for this page
             text_data = pytesseract.image_to_data(page, output_type=pytesseract.Output.DICT)
-
-            # DEBUG: Print all text found on this page
-            print(f"🔍 DEBUG - All text found on page {page_idx + 1}:")
-            all_text = [word.strip() for word in text_data["text"] if word.strip()]
-            for i, word in enumerate(all_text):
-                print(f"  {i}: '{word}'")
-            print("=" * 50)
 
             # Create drawing context
             draw = ImageDraw.Draw(page)
@@ -329,7 +380,7 @@ class SimplePDFAutoFillSystem:
                                 if field_found:
                                     page_filled += 1
                                     total_filled += 1
-                                    print(f"✅ Found single word: '{word_clean}' (variation: '{variation}') -> filled with '{value}'")
+                                    print(f"Found single word: '{word_clean}' (variation: '{variation}') -> filled with '{value}'")
                                     break
                     else:
                         # Multi-word field - find consecutive matching words
@@ -367,26 +418,26 @@ class SimplePDFAutoFillSystem:
                                         page_filled += 1
                                         total_filled += 1
                                         matched_text = " ".join([text_data["text"][i+k].strip() for k in range(len(variation_words)) if i+k < len(text_data["text"]) and text_data["text"][i+k].strip()])
-                                        print(f"✅ Found multi-word: '{matched_text}' (variation: '{variation}') -> filled with '{value}'")
+                                        print(f"Found multi-word: '{matched_text}' (variation: '{variation}') -> filled with '{value}'")
                                         break
 
                 if not field_found:
-                    print(f"⚠️  Field '{pdf_field}' (all variations) not found on page {page_idx + 1}")
+                    print(f"Field '{pdf_field}' (all variations) not found on page {page_idx + 1}")
 
             print(f"Page {page_idx + 1}: Filled {page_filled} fields")
             filled_pages.append(page)
 
-        print(f"\n📊 Total fields filled: {total_filled}")
+        print(f"\nTotal fields filled: {total_filled}")
 
         # Save the filled PDF
         if filled_pages:
             filled_pages[0].save(output_pdf, save_all=True, append_images=filled_pages[1:])
-            print(f"✅ Filled PDF saved to: {output_pdf}")
+            print(f"Filled PDF saved to: {output_pdf}")
 
         return output_pdf
 
     def _try_fill_field(self, draw, text_data, word_index, value, font, match_type):
-        """Helper method to try filling a field at a given position"""
+        """Helper method for filling fields with font size 22"""
         try:
             # Get position of the matched word
             x = text_data["left"][word_index]
@@ -397,21 +448,32 @@ class SimplePDFAutoFillSystem:
             fill_position = None
             current_word = text_data["text"][word_index].strip()
 
+            # Test font size
+            try:
+                bbox = font.getbbox(value)
+                text_width = bbox[2] - bbox[0]
+                text_height = bbox[3] - bbox[1]
+                print(f"Text '{value}' will be {text_width}x{text_height}px")
+                
+                # Use normal drawing function for font size 22
+                def draw_text_func(pos, text):
+                    draw.text(pos, text, font=font, fill="black")
+                    
+            except Exception as e:
+                print(f"Font measurement failed: {e}")
+                # Fallback drawing function
+                def draw_text_func(pos, text):
+                    draw.text(pos, text, font=font, fill="black")
+
             # Check if current word itself has fill indicators (: or _)
             if current_word.endswith(':') or '_' in current_word:
                 if current_word.endswith(':'):
                     fill_position = (x + w + 10, y + int(h * 0.2))
-                    print(f"🎯 Current word has colon: '{current_word}'")
+                    print(f"Current word has colon: '{current_word}'")
                 elif '_' in current_word and len(current_word) > 1:
-                    try:
-                        bbox = draw.textbbox((0, 0), value, font=font)
-                        text_width = bbox[2] - bbox[0]
-                    except:
-                        text_width = len(value) * 12
-
                     centered_x = x + max(0, (w - text_width) // 2)
                     fill_position = (centered_x, y + int(h * 0.1))
-                    print(f"🎯 Current word has underline: '{current_word}' - centering text")
+                    print(f"Current word has underline: '{current_word}' - centering text")
             else:
                 # Look for fill indicators in the next few words
                 for check_idx in range(word_index + 1, min(word_index + 4, len(text_data["text"]))):
@@ -434,19 +496,13 @@ class SimplePDFAutoFillSystem:
 
                         # If it's underlines, center the text
                         if '_' in next_word and len(next_word) > 1:
-                            try:
-                                bbox = draw.textbbox((0, 0), value, font=font)
-                                text_width = bbox[2] - bbox[0]
-                            except:
-                                text_width = len(value) * 12
-
                             centered_x = next_x + max(0, (next_w - text_width) // 2)
                             fill_position = (centered_x, next_y + int(next_h * 0.1))
-                            print(f"🎯 Found underline indicator: '{next_word}' - centering text")
+                            print(f"Found underline indicator: '{next_word}' - centering text")
                         else:
                             # For : or ., place right after the indicator
                             fill_position = (next_x + next_w + 5, next_y + int(next_h * 0.2))
-                            print(f"🎯 Found indicator: '{next_word}' - placing after")
+                            print(f"Found indicator: '{next_word}' - placing after")
 
                         break
                     elif re.match(r'^[a-zA-Z0-9\s]+$', next_word):
@@ -456,23 +512,23 @@ class SimplePDFAutoFillSystem:
             # If still no position found, try placing directly after the matched word
             if not fill_position:
                 fill_position = (x + w + 10, y + int(h * 0.2))
-                print(f"🔸 No specific indicator found, placing after word '{current_word}'")
+                print(f"No specific indicator found, placing after word '{current_word}'")
 
             # Fill the text if we found a valid position
             if fill_position:
-                draw.text(fill_position, value, font=font, fill="black")
-                print(f"✅ Filled using {match_type} at {fill_position}")
+                draw_text_func(fill_position, value)
+                print(f"Filled '{value}' using {match_type} at {fill_position}")
                 return True
             else:
-                print(f"🔸 Could not determine fill position for '{current_word}'")
+                print(f"Could not determine fill position for '{current_word}'")
                 return False
 
         except Exception as e:
-            print(f"❌ Error in _try_fill_field: {e}")
+            print(f"Error in _try_fill_field: {e}")
             return False
 
-    def autofill_pdf(self, input_pdf: str, output_pdf: str, biodata: Dict[str, Any]) -> str:
-        """Complete auto-fill pipeline with simplified filling"""
+    def autofill_pdf(self, input_pdf: str, output_pdf: str, biodata: Dict[str, Any], font_size: int = 22, use_high_dpi: bool = False) -> str:
+        """Complete auto-fill pipeline with standard font size 22"""
         print("Step 1: Extracting fillable fields from PDF...")
         fillable_fields = self.extract_fillable_fields(input_pdf)
         print(f"Found {len(fillable_fields.get('fillable_fields', []))} fillable fields")
@@ -489,8 +545,9 @@ class SimplePDFAutoFillSystem:
         with open('matched_fields.json', 'w') as f:
             json.dump(matched_data, f, indent=2)
 
-        print("Step 3: Simple auto-filling PDF...")
-        return self.simple_autofill_with_pil(input_pdf, output_pdf, matched_data)
+        print(f"Step 3: Auto-filling PDF with font size {font_size}...")
+        return self.simple_autofill_with_pil(input_pdf, output_pdf, matched_data, font_size, use_high_dpi)
+
 
 # Utility function to manually add colon variations to existing JSON
 def add_colon_variations_to_json(json_file_path: str = "matched_fields.json"):
@@ -498,7 +555,7 @@ def add_colon_variations_to_json(json_file_path: str = "matched_fields.json"):
     Utility function to add colon variations to an existing matched_fields.json
     """
     if not os.path.exists(json_file_path):
-        print(f"❌ JSON file '{json_file_path}' not found!")
+        print(f"JSON file '{json_file_path}' not found!")
         return
 
     with open(json_file_path, 'r') as f:
@@ -524,57 +581,17 @@ def add_colon_variations_to_json(json_file_path: str = "matched_fields.json"):
     with open(json_file_path, 'w') as f:
         json.dump(data, f, indent=2)
 
-    print(f"✅ Added colon variations to {json_file_path}")
+    print(f"Added colon variations to {json_file_path}")
 
-# Main execution function
-def main():
-    # Initialize the system
-    autofill_system = SimplePDFAutoFillSystem()
 
-    # Sample biodata - replace with your actual data
-    biodata = {
-        "name": "John Smith",
-        "first_name": "John",
-        "last_name": "Smith",
-        "mobile_no": "+1-234-567-8900",
-        "email_id": "john.smith@email.com",
-        "date_of_birth": "1985-06-15",
-        "date":"14-09-2025",
-        "address": "123 Main Street, New York, NY 10001",
-        "designation": "Software Engineer",
-        "company": "Tech Corp",
-        "experience": "5 years",
-        "age": "38",
-        "gender": "Male"
-    }
-
-    try:
-        # Process the PDF
-        input_pdf = "Dummy.pdf"  # Replace with your PDF path
-        output_pdf = "simple_filled.pdf"
-
-        result = autofill_system.autofill_pdf(input_pdf, output_pdf, biodata)
-        print(f"✅ Auto-fill completed! Output saved to: {result}")
-
-        # JSON files will be created:
-        # - fillable_fields.json: Contains all detected fillable fields
-        # - matched_fields.json: Contains matched fields with values and variations
-
-    except Exception as e:
-        print(f"❌ Error: {e}")
-
-# Alternative function to use existing JSON files
-def fill_from_existing_json(input_pdf: str, output_pdf: str, matched_fields_json: str = "matched_fields.json"):
+def fill_from_existing_json(input_pdf: str, output_pdf: str, matched_fields_json: str = "matched_fields.json", font_size: int = 22, use_high_dpi: bool = False):
     """
-    Use this if you already have the matched_fields.json from previous run
+    Use existing JSON with standard font size 22
     """
-
-    # Check if JSON file exists
     if not os.path.exists(matched_fields_json):
-        print(f"❌ JSON file '{matched_fields_json}' not found!")
+        print(f"JSON file '{matched_fields_json}' not found!")
         return None
 
-    # Load the matched fields JSON
     with open(matched_fields_json, 'r') as f:
         matched_data = json.load(f)
 
@@ -592,39 +609,44 @@ def fill_from_existing_json(input_pdf: str, output_pdf: str, matched_fields_json
                 ]
                 field['pdf_field_variations'] = list(dict.fromkeys(field['pdf_field_variations']))
 
-    # Create system instance and fill
     autofill_system = SimplePDFAutoFillSystem()
-    return autofill_system.simple_autofill_with_pil(input_pdf, output_pdf, matched_data)
+    return autofill_system.simple_autofill_with_pil(input_pdf, output_pdf, matched_data, font_size, use_high_dpi)
 
-# Quick debug function to just see OCR text without filling
-def debug_ocr_only(input_pdf: str, page_num: int = None):
-    """
-    Debug function to see what OCR detects on specific page(s)
-    """
-    pages = convert_from_path(input_pdf, dpi=200)
 
-    if page_num is not None:
-        pages = [pages[page_num - 1]]  # Convert to 0-based index
-        start_idx = page_num
-    else:
-        start_idx = 1
+def main():
+    """Main function with standard font size 22"""
+    autofill_system = SimplePDFAutoFillSystem()
 
-    for idx, page in enumerate(pages):
-        page_number = start_idx + idx if page_num is None else page_num
-        text_data = pytesseract.image_to_data(page, output_type=pytesseract.Output.DICT)
+    biodata = {
+        "name": "John Smith",
+        "first_name": "John",
+        "last_name": "Smith",
+        "mobile_no": "+1-234-567-8900",
+        "email_id": "john.smith@email.com",
+        "date_of_birth": "1985-06-15",
+        "date":"14-09-2025",
+        "address": "123 Main Street, New York, NY 10001",
+        "designation": "Software Engineer",
+        "company": "Tech Corp",
+        "experience": "5 years",
+        "age": "38",
+        "gender": "Male"
+    }
 
-        print(f"\n🔍 OCR Text found on page {page_number}:")
-        print("-" * 50)
+    try:
+        input_pdf = "Dummy.pdf"
+        output_pdf = "filled_output.pdf"
+        
+        result = autofill_system.autofill_pdf(input_pdf, output_pdf, biodata, font_size=22)
+        print(f"Auto-fill completed: {result}")
+        return result
 
-        for i, word in enumerate(text_data["text"]):
-            if word.strip():
-                x, y, w, h = (text_data["left"][i], text_data["top"][i],
-                            text_data["width"][i], text_data["height"][i])
-                print(f"{i:3d}: '{word.strip()}' at ({x}, {y}) size ({w}x{h})")
+    except Exception as e:
+        print(f"Error: {e}")
+        return None
+
 
 if __name__ == "__main__":
-    # Option 1: Run complete process
+    print("PDF Auto-Fill System - Optimized Version")
+    print("Using standard font size: 22")
     main()
-
-    # Option 2: If you already have JSON files, just fill
-    # fill_from_existing_json("input.pdf", "quick_fill.pdf")
