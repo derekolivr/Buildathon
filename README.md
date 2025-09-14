@@ -9,6 +9,8 @@ All‑in‑one dashboard for managing clients, documents, and AI‑assisted auto
 - Documents management (upload to Supabase Storage bucket `documents`)
 - AI Ingest: upload a file, call an external OCR/LLM service, extract client info, upsert client, and save document
 - Middleware‑protected routes for `/dashboard`
+- Recent Activity (audit log of uploads/ingests/client edits)
+- Inline client actions (Edit/Delete) from the three‑dots menu
 
 ### Tech
 
@@ -77,7 +79,20 @@ create table if not exists public.messages (
   created_at timestamptz default now()
 );
 
+-- Activities (audit log)
+create table if not exists public.activities (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  type text not null,                    -- e.g. document.uploaded, client.updated
+  message text not null,
+  client_id uuid references public.clients(id) on delete set null,
+  document_id uuid references public.documents(id) on delete set null,
+  metadata jsonb default '{}'::jsonb,
+  created_at timestamptz default now()
+);
+
 alter table public.clients enable row level security;
+alter table public.activities enable row level security;
 
 drop policy if exists "clients_select_own" on public.clients;
 create policy "clients_select_own" on public.clients for select using (auth.uid() = user_id);
@@ -90,6 +105,13 @@ create policy "clients_update_own" on public.clients for update using (auth.uid(
 
 drop policy if exists "clients_delete_own" on public.clients;
 create policy "clients_delete_own" on public.clients for delete using (auth.uid() = user_id);
+
+-- Activity policies
+create policy if not exists "activities_select_own" on public.activities
+for select using (auth.uid() = user_id);
+
+create policy if not exists "activities_insert_own" on public.activities
+for insert with check (auth.uid() = user_id);
 
 -- Storage bucket for uploads (private is fine)
 insert into storage.buckets (id, name, public)
@@ -121,7 +143,7 @@ rm -rf .next && npm run build && npm start
 
 - When opened with `?clientId=<id>`: page shows stats and list for that client
   - Upload Document: attaches file to that client (no extraction)
-  - Ingest Document: calls external extractor to auto‑detect client; if different, redirects to that client
+  - Ingest Document: calls external extractor to auto‑detect client; if different, redirects to that client (logged in Recent Activity)
 - When opened without `clientId`: shows only Ingest; on success, redirects to the detected/created client
 
 ### Ingestion Service Contract
@@ -160,6 +182,7 @@ If `DOCUMENT_EXTRACT_URL` is not set, the API uses mock fields to keep the demo 
 - `POST /api/documents` → upload file (multipart) `{ file, client_id }`
 - `POST /api/autofill` → mock document autofill (updates `extracted_fields`)
 - `POST /api/ingest` → forward file to `DOCUMENT_EXTRACT_URL`, upsert client, save document
+- `GET /api/activity` → latest activity rows for current user
 
 ---
 
@@ -184,6 +207,14 @@ select pg_notify('pgrst', 'reload schema');
 **Extractor always returns mock data**
 
 - Your external endpoint must return HTTP 200 with JSON matching the contract above; otherwise `/api/ingest` falls back to mock.
+
+**DialogTrigger error when opening dialogs**
+
+- Use controlled dialogs (set `open` state) or ensure `DialogTrigger` is nested inside the same `Dialog`. The app uses controlled dialogs for reliability.
+
+**Missing avatar.png 404**
+
+- Either add `public/avatar.png` or rely on initials fallback by removing the `AvatarImage` usage in `src/components/dashboard/header.tsx`.
 
 ---
 
