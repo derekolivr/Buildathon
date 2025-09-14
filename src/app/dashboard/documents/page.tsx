@@ -4,10 +4,11 @@ import { useState, useEffect, Suspense } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DocumentUploader } from "@/components/documents/document-uploader";
+import { DocumentIngestor } from "@/components/documents/document-ingestor";
 import { DocumentList } from "@/components/documents/document-list";
 import { FileText, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 
 interface Client {
@@ -27,6 +28,7 @@ interface Document {
 
 function DocumentsPageContent() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const clientId = searchParams.get("clientId");
   const [client, setClient] = useState<Client | null>(null);
   const [documents, setDocuments] = useState<Document[]>([]);
@@ -122,15 +124,36 @@ function DocumentsPageContent() {
 
   if (!clientId) {
     return (
-      <div className="flex flex-col items-center justify-center h-96 space-y-4">
-        <h1 className="text-2xl font-bold">No Client Selected</h1>
-        <p className="text-muted-foreground">Please select a client from the clients page to view their documents.</p>
-        <Button asChild>
-          <Link href="/dashboard/clients">
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Go to Clients
-          </Link>
-        </Button>
+      <div className="space-y-6">
+        <div className="flex flex-col items-center justify-center h-60 space-y-4">
+          <h1 className="text-2xl font-bold">No Client Selected</h1>
+          <p className="text-muted-foreground">
+            You can ingest a document to auto-create or update a client, or pick a client first.
+          </p>
+          <Button asChild>
+            <Link href="/dashboard/clients">
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Go to Clients
+            </Link>
+          </Button>
+        </div>
+        <Card>
+          <CardHeader>
+            <CardTitle>Ingest Document to Create/Update Client</CardTitle>
+            <CardDescription>
+              Upload any document; we’ll extract client info and upsert a client automatically.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <DocumentIngestor
+              onCompleted={({ client }) => {
+                if (client?.id) {
+                  router.push(`/dashboard/documents?clientId=${client.id}`);
+                }
+              }}
+            />
+          </CardContent>
+        </Card>
       </div>
     );
   }
@@ -214,6 +237,42 @@ function DocumentsPageContent() {
                 </CardContent>
               </Card>
             )}
+            <Card>
+              <CardHeader>
+                <CardTitle>Ingest Document to Create/Update Client</CardTitle>
+                <CardDescription>
+                  Upload any document; we’ll extract client info and upsert a client automatically.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <DocumentIngestor
+                  onCompleted={({ client, document }) => {
+                    // Bring the new document into the list and update stats
+                    if (document) {
+                      const normalizedDoc: Document = {
+                        id: document.id,
+                        file_name: document.file_name,
+                        storage_url: document.storage_url ?? "",
+                        extracted_fields: document.extracted_fields,
+                        autofilled_url: document.autofilled_url ?? undefined,
+                        created_at: document.created_at,
+                      };
+                      setDocuments((prev) => [normalizedDoc, ...prev]);
+                      setStats((prev) => ({ ...prev, total: prev.total + 1 }));
+                    }
+                    // If the ingested client matches the current client, refresh details
+                    if (clientId && client && client.id === clientId) {
+                      const normalizedClient: Client = {
+                        id: client.id,
+                        name: client.name,
+                        organization: client.organization ?? undefined,
+                      };
+                      setClient(normalizedClient);
+                    }
+                  }}
+                />
+              </CardContent>
+            </Card>
             <Card>
               <CardHeader>
                 <CardTitle>Recent Documents</CardTitle>
