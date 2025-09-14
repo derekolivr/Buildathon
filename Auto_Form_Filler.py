@@ -539,6 +539,7 @@ def main():
         "mobile_no": "+1-234-567-8900",
         "email_id": "john.smith@email.com",
         "date_of_birth": "1985-06-15",
+        "date":"14-09-2025",
         "address": "123 Main Street, New York, NY 10001",
         "designation": "Software Engineer",
         "company": "Tech Corp",
