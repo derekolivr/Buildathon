@@ -1,60 +1,53 @@
 "use client";
 
+import { useEffect, useState } from "react";
+
+type Activity = {
+  id: string;
+  type: string;
+  message: string;
+  client_id?: string | null;
+  document_id?: string | null;
+  created_at: string;
+};
+
 export function RecentActivity() {
-  const activities = [
-    {
-      id: "1",
-      action: "Document Processed",
-      description: "Insurance claim form auto-filled for Client A",
-      time: "10 mins ago",
-      icon: "📄",
-    },
-    {
-      id: "2",
-      action: "Payment Received",
-      description: "Client B paid $750.00 for policy renewal",
-      time: "1 hour ago",
-      icon: "💰",
-    },
-    {
-      id: "3",
-      action: "Reminder Sent",
-      description: "Automated renewal reminder sent to Client C",
-      time: "3 hours ago",
-      icon: "🔔",
-    },
-    {
-      id: "4",
-      action: "Document Generated",
-      description: "New policy document created for Client D",
-      time: "Yesterday",
-      icon: "✅",
-    },
-    {
-      id: "5",
-      action: "Voice Note Transcribed",
-      description: "Client meeting notes converted to text",
-      time: "Yesterday",
-      icon: "🎤",
-    },
-  ];
+  const [rows, setRows] = useState<Activity[]>([]);
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const res = await fetch("/api/activity");
+        if (!res.ok) return;
+        const data = (await res.json()) as Activity[];
+        setRows(data ?? []);
+      } catch (e) {
+        // ignore
+      }
+    };
+    load();
+  }, []);
 
   return (
     <div className="space-y-4">
-      {activities.map((activity) => (
-        <div key={activity.id} className="flex items-start gap-4 pb-4 last:pb-0 last:border-0 border-b">
-          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted">
-            <span role="img" aria-label={activity.action}>
-              {activity.icon}
-            </span>
+      {rows.length === 0 ? (
+        <p className="text-sm text-muted-foreground">No recent activity.</p>
+      ) : (
+        rows.map((a) => (
+          <div key={a.id} className="flex items-start gap-4 pb-4 last:pb-0 last:border-0 border-b">
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted">
+              <span role="img" aria-label={a.type}>
+                📄
+              </span>
+            </div>
+            <div className="space-y-1">
+              <p className="text-sm font-medium leading-none">{a.type.replace(/\./g, " → ")}</p>
+              <p className="text-sm text-muted-foreground">{a.message}</p>
+              <p className="text-xs text-muted-foreground">{new Date(a.created_at).toLocaleString()}</p>
+            </div>
           </div>
-          <div className="space-y-1">
-            <p className="text-sm font-medium leading-none">{activity.action}</p>
-            <p className="text-sm text-muted-foreground">{activity.description}</p>
-            <p className="text-xs text-muted-foreground">{activity.time}</p>
-          </div>
-        </div>
-      ))}
+        ))
+      )}
     </div>
   );
 }

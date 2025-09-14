@@ -105,6 +105,16 @@ export async function POST(req: NextRequest) {
       .single();
 
     if (error) throw error;
+    // Log activity
+    await supabase
+      .from("activities")
+      .insert({
+        user_id: user.id,
+        type: "document.uploaded",
+        message: `Uploaded ${file.name}`,
+        client_id: clientId,
+        document_id: data.id,
+      });
     return NextResponse.json({ document: data });
   } catch (err: unknown) {
     const message =

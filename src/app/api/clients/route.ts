@@ -128,6 +128,15 @@ export async function POST(req: NextRequest) {
       .single();
 
     if (error) throw error;
+    // Log activity
+    await (admin ?? supabase)
+      .from("activities")
+      .insert({
+        user_id: user.id,
+        type: "client.created",
+        message: `Created client ${name}`,
+        client_id: data.id,
+      });
     return NextResponse.json({ client: data });
   } catch (error: unknown) {
     const errObj = error as unknown;
@@ -183,6 +192,15 @@ export async function PUT(req: NextRequest) {
       .single();
 
     if (error) throw error;
+    await (admin ?? supabase)
+      .from("activities")
+      .insert({
+        user_id: user.id,
+        type: "client.updated",
+        message: `Updated client ${data.name}`,
+        client_id: data.id,
+        metadata: updates,
+      });
     return NextResponse.json({ client: data });
   } catch (error: unknown) {
     const errObj = error as unknown;
@@ -237,6 +255,14 @@ export async function DELETE(req: NextRequest) {
       .eq("user_id", user.id);
     if (error) throw error;
 
+    await (admin ?? supabase)
+      .from("activities")
+      .insert({
+        user_id: user.id,
+        type: "client.deleted",
+        message: `Deleted client ${id}`,
+        client_id: id,
+      });
     return NextResponse.json({ ok: true });
   } catch (error: unknown) {
     const errObj = error as unknown;

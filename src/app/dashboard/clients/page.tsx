@@ -18,7 +18,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -46,8 +45,15 @@ export default function ClientsPage() {
   const [clients, setClients] = useState<Client[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [clientToDelete, setClientToDelete] = useState<Client | null>(null);
+  const [clientToEdit, setClientToEdit] = useState<Client | null>(null);
   const [isLoggedIn, setIsLoggedIn] = useState<boolean | null>(null);
   const [newClient, setNewClient] = useState({
+    name: "",
+    email: "",
+    phone: "",
+    organization: "",
+  });
+  const [editForm, setEditForm] = useState({
     name: "",
     email: "",
     phone: "",
@@ -89,6 +95,11 @@ export default function ClientsPage() {
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { id, value } = e.target;
     setNewClient((prev) => ({ ...prev, [id]: value }));
+  };
+
+  const handleEditChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { id, value } = e.target;
+    setEditForm((prev) => ({ ...prev, [id]: value }));
   };
 
   const handleAddClient = async () => {
@@ -149,6 +160,37 @@ export default function ClientsPage() {
     }
   };
 
+  const openEditDialog = (client: Client) => {
+    setClientToEdit(client);
+    setEditForm({
+      name: client.name || "",
+      email: client.email || "",
+      phone: client.phone || "",
+      organization: client.organization || "",
+    });
+  };
+
+  const handleUpdateClient = async () => {
+    if (!clientToEdit) return;
+    try {
+      const payload = { id: clientToEdit.id, ...editForm };
+      const res = await fetch("/api/clients", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || "Failed to update client");
+      }
+      setClientToEdit(null);
+      fetchClients();
+    } catch (e) {
+      console.error("Update client failed", e);
+      alert(e instanceof Error ? e.message : String(e));
+    }
+  };
+
   return (
     <div className="space-y-6">
       {isLoggedIn === false && (
@@ -166,12 +208,10 @@ export default function ClientsPage() {
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold tracking-tight">Clients</h1>
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogTrigger asChild>
-            <Button>
-              <Plus className="h-4 w-4 mr-2" />
-              New Client
-            </Button>
-          </DialogTrigger>
+          <Button onClick={() => setIsDialogOpen(true)}>
+            <Plus className="h-4 w-4 mr-2" />
+            New Client
+          </Button>
           <DialogContent className="sm:max-w-[425px]">
             <DialogHeader>
               <DialogTitle>Add New Client</DialogTitle>
@@ -256,17 +296,22 @@ export default function ClientsPage() {
                         <DropdownMenuItem asChild>
                           <a href={`/dashboard/documents?clientId=${client.id}`}>View Documents</a>
                         </DropdownMenuItem>
-                        <DropdownMenuItem>Edit</DropdownMenuItem>
-                        <AlertDialogTrigger asChild>
-                          <DropdownMenuItem
-                            onSelect={(e) => {
-                              e.preventDefault();
-                              setClientToDelete(client);
-                            }}
-                          >
-                            Delete
-                          </DropdownMenuItem>
-                        </AlertDialogTrigger>
+                        <DropdownMenuItem
+                          onClick={(e) => {
+                            e.preventDefault();
+                            openEditDialog(client);
+                          }}
+                        >
+                          Edit
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={(e) => {
+                            e.preventDefault();
+                            setClientToDelete(client);
+                          }}
+                        >
+                          Delete
+                        </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </TableCell>
@@ -276,6 +321,52 @@ export default function ClientsPage() {
           </Table>
         </CardContent>
       </Card>
+      {/* Edit dialog */}
+      <Dialog open={!!clientToEdit} onOpenChange={(open: boolean) => !open && setClientToEdit(null)}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Edit Client</DialogTitle>
+            <DialogDescription>Update the client details and save changes.</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="name" className="text-right">
+                Name
+              </Label>
+              <Input id="name" value={editForm.name} onChange={handleEditChange} className="col-span-3" />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="email" className="text-right">
+                Email
+              </Label>
+              <Input id="email" value={editForm.email} onChange={handleEditChange} className="col-span-3" />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="phone" className="text-right">
+                Phone
+              </Label>
+              <Input id="phone" value={editForm.phone} onChange={handleEditChange} className="col-span-3" />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="organization" className="text-right">
+                Organization
+              </Label>
+              <Input
+                id="organization"
+                value={editForm.organization}
+                onChange={handleEditChange}
+                className="col-span-3"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setClientToEdit(null)}>
+              Cancel
+            </Button>
+            <Button onClick={handleUpdateClient}>Save changes</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <AlertDialog open={!!clientToDelete} onOpenChange={(open: boolean) => !open && setClientToDelete(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>

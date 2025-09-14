@@ -1,3 +1,197 @@
+## Microentrepreneur Dashboard
+
+All‑in‑one dashboard for managing clients, documents, and AI‑assisted automation.
+
+### Features
+
+- Authenticated dashboard (Supabase Auth)
+- Clients CRUD (PostgREST over `public.clients`)
+- Documents management (upload to Supabase Storage bucket `documents`)
+- AI Ingest: upload a file, call an external OCR/LLM service, extract client info, upsert client, and save document
+- Middleware‑protected routes for `/dashboard`
+
+### Tech
+
+- Next.js 15 (App Router), React 19
+- TypeScript, ESLint
+- Supabase: `@supabase/ssr` server client for auth/session & DB
+
+---
+
+## Quickstart
+
+1. Install
+
+```bash
+npm install
+```
+
+2. Environment
+
+Create `.env` (or `.env.local`) in project root:
+
+```bash
+NEXT_PUBLIC_SUPABASE_URL=https://<project-ref>.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJ...
+
+# Optional: external OCR/LLM service used by /api/ingest
+# If set, the API forwards uploaded files as multipart/form-data with field "file"
+DOCUMENT_EXTRACT_URL=https://your-endpoint.example.com/extract
+# Optional bearer for your extractor; leave empty to disable
+DOCUMENT_EXTRACT_BEARER=
+```
+
+3. Database schema (run in Supabase SQL editor for the SAME project as your env)
+
+```sql
+create extension if not exists pgcrypto;
+
+create table if not exists public.clients (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  name text not null,
+  phone text,
+  email text,
+  address text,
+  organization text,
+  created_at timestamptz default now()
+);
+
+create table if not exists public.documents (
+  id uuid primary key default gen_random_uuid(),
+  client_id uuid not null references public.clients(id) on delete cascade,
+  file_name text not null,
+  storage_url text,
+  extracted_fields jsonb default '{}'::jsonb,
+  autofilled_url text,
+  created_at timestamptz default now()
+);
+
+create table if not exists public.messages (
+  id uuid primary key default gen_random_uuid(),
+  client_id uuid not null references public.clients(id) on delete cascade,
+  channel text not null,
+  body text not null,
+  status text default 'queued',
+  scheduled_at timestamptz,
+  created_at timestamptz default now()
+);
+
+alter table public.clients enable row level security;
+
+drop policy if exists "clients_select_own" on public.clients;
+create policy "clients_select_own" on public.clients for select using (auth.uid() = user_id);
+
+drop policy if exists "clients_insert_own" on public.clients;
+create policy "clients_insert_own" on public.clients for insert with check (auth.uid() = user_id);
+
+drop policy if exists "clients_update_own" on public.clients;
+create policy "clients_update_own" on public.clients for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+drop policy if exists "clients_delete_own" on public.clients;
+create policy "clients_delete_own" on public.clients for delete using (auth.uid() = user_id);
+
+-- Storage bucket for uploads (private is fine)
+insert into storage.buckets (id, name, public)
+values ('documents','documents', false)
+on conflict (id) do nothing;
+
+-- Reload PostgREST schema cache
+select pg_notify('pgrst', 'reload schema');
+```
+
+4. Run
+
+```bash
+npm run dev
+# or production
+rm -rf .next && npm run build && npm start
+```
+
+---
+
+## App Flow
+
+### Clients
+
+- Create/edit/delete clients
+- API: `GET/POST/PUT/DELETE /api/clients`
+
+### Documents
+
+- When opened with `?clientId=<id>`: page shows stats and list for that client
+  - Upload Document: attaches file to that client (no extraction)
+  - Ingest Document: calls external extractor to auto‑detect client; if different, redirects to that client
+- When opened without `clientId`: shows only Ingest; on success, redirects to the detected/created client
+
+### Ingestion Service Contract
+
+`/api/ingest` expects your external service to accept:
+
+- Method: `POST`
+- Content‑Type: `multipart/form-data`
+- Field name: `file`
+- Response JSON (flat keys preferred):
+
+```json
+{
+  "name": "Jane Smith",
+  "email": "jane@example.com",
+  "phone": "555-0100",
+  "organization": "Acme",
+  "address": "123 Main St",
+  "extras": { "any": "other fields (optional)" }
+}
+```
+
+If `DOCUMENT_EXTRACT_URL` is not set, the API uses mock fields to keep the demo running.
+
+---
+
+## API Summary
+
+- `GET /api/auth/check` → session status
+- `POST /auth/signout` → sign out and redirect
+- `GET /api/clients?id=...` → fetch by id; without id, list for current user
+- `POST /api/clients` → create client `{ name, phone?, email?, address?, organization? }`
+- `PUT /api/clients` → update client `{ id, ...updates }`
+- `DELETE /api/clients?id=...` → delete
+- `GET /api/documents?client_id=...` → list client documents
+- `POST /api/documents` → upload file (multipart) `{ file, client_id }`
+- `POST /api/autofill` → mock document autofill (updates `extracted_fields`)
+- `POST /api/ingest` → forward file to `DOCUMENT_EXTRACT_URL`, upsert client, save document
+
+---
+
+## Troubleshooting
+
+**Failed to parse cookie string / base64 JSON**
+
+- Fixed by using `@supabase/ssr` everywhere (middleware and route handlers)
+
+**Invalid API key**
+
+- Happens if `SUPABASE_SERVICE_ROLE_KEY` is a placeholder; remove it or set the real one. The app ignores obviously invalid placeholders.
+
+**Could not find the table 'public.clients'**
+
+- Create tables in the same Supabase project your env points to and run:
+
+```sql
+select pg_notify('pgrst', 'reload schema');
+```
+
+**Extractor always returns mock data**
+
+- Your external endpoint must return HTTP 200 with JSON matching the contract above; otherwise `/api/ingest` falls back to mock.
+
+---
+
+## Notes
+
+- Keep secrets on the server (never expose service role keys or third‑party API keys to the browser)
+- The ingestion pipeline is modular; you can swap in Cloudflare Worker, Colab + cloudflared, or any HTTPS service
+
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
 ## Getting Started

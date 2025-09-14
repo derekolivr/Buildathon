@@ -153,6 +153,18 @@ export async function POST(req: NextRequest) {
             .single();
         if (docError) throw docError;
 
+        // Log activity
+        await supabase
+            .from("activities")
+            .insert({
+                user_id: user.id,
+                type: "document.ingested",
+                message: `Ingested ${file.name}`,
+                client_id: client.id,
+                document_id: document.id,
+                metadata: extracted,
+            });
+
         return NextResponse.json({ client, document });
     } catch (err: unknown) {
         const message = err instanceof Error ? err.message : JSON.stringify(err);

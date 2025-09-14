@@ -226,28 +226,20 @@ function DocumentsPageContent() {
             </Card>
           </div>
           <div className="grid gap-6 md:grid-cols-1">
-            {clientId && (
-              <Card>
-                <CardHeader>
-                  <CardTitle>Upload Document</CardTitle>
-                  <CardDescription>Upload a document for AI-powered processing and form filling</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <DocumentUploader clientId={clientId} onUploaded={handleDocumentUploaded} />
-                </CardContent>
-              </Card>
-            )}
             <Card>
               <CardHeader>
-                <CardTitle>Ingest Document to Create/Update Client</CardTitle>
+                <CardTitle>
+                  {client ? "Ingest Document (auto-detect client)" : "Ingest Document to Create/Update Client"}
+                </CardTitle>
                 <CardDescription>
-                  Upload any document; we’ll extract client info and upsert a client automatically.
+                  {client
+                    ? `We’ll extract client info. If it belongs to someone other than ${client.name}, we’ll switch to that client.`
+                    : "Upload any document; we’ll extract client info and upsert a client automatically."}
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 <DocumentIngestor
-                  onCompleted={({ client, document }) => {
-                    // Bring the new document into the list and update stats
+                  onCompleted={({ client: ingestedClient, document }) => {
                     if (document) {
                       const normalizedDoc: Document = {
                         id: document.id,
@@ -260,12 +252,15 @@ function DocumentsPageContent() {
                       setDocuments((prev) => [normalizedDoc, ...prev]);
                       setStats((prev) => ({ ...prev, total: prev.total + 1 }));
                     }
-                    // If the ingested client matches the current client, refresh details
-                    if (clientId && client && client.id === clientId) {
+                    if (ingestedClient?.id) {
+                      if (!clientId || ingestedClient.id !== clientId) {
+                        router.push(`/dashboard/documents?clientId=${ingestedClient.id}`);
+                        return;
+                      }
                       const normalizedClient: Client = {
-                        id: client.id,
-                        name: client.name,
-                        organization: client.organization ?? undefined,
+                        id: ingestedClient.id,
+                        name: ingestedClient.name,
+                        organization: ingestedClient.organization ?? undefined,
                       };
                       setClient(normalizedClient);
                     }
@@ -273,6 +268,22 @@ function DocumentsPageContent() {
                 />
               </CardContent>
             </Card>
+
+            {clientId && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>{client ? `Upload Document (attach to ${client.name})` : "Upload Document"}</CardTitle>
+                  <CardDescription>
+                    {client
+                      ? "Store a file for this client without running extraction. Use when you know the client."
+                      : "Upload a document for AI-powered processing and form filling"}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <DocumentUploader clientId={clientId} onUploaded={handleDocumentUploaded} />
+                </CardContent>
+              </Card>
+            )}
             <Card>
               <CardHeader>
                 <CardTitle>Recent Documents</CardTitle>
