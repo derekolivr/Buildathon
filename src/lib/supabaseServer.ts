@@ -1,26 +1,10 @@
-import { createServerClient } from '@supabase/ssr';
-import { cookies } from 'next/headers';
+import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs";
+import { cookies } from "next/headers";
+// import { Database } from '@/lib/database.types'; // You can uncomment this if you have types generated
 
 export function getSupabaseServerClient() {
-    const cookieStore = cookies();
-
-    return createServerClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-        {
-            cookies: {
-                get(name) {
-                    return cookieStore.get(name)?.value;
-                },
-                set(name, value, options) {
-                    // This is a read-only client for API routes
-                    cookieStore.set(name, value, options);
-                },
-                remove(name, options) {
-                    // This is a read-only client for API routes
-                    cookieStore.set(name, '', options);
-                },
-            },
-        }
-    );
+    // For API Routes, we use createRouteHandlerClient and pass the cookies function directly.
+    // This is the recommended approach for the Next.js App Router.
+    // return createRouteHandlerClient<Database>({ cookies });
+    return createRouteHandlerClient({ cookies });
 }
