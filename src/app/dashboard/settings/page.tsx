@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { createClient } from "@/lib/supabase";
+import { supabase } from "@/lib/supabaseClient";
 import { User } from "@supabase/supabase-js";
 
 export default function SettingsPage() {
@@ -17,13 +17,13 @@ export default function SettingsPage() {
   const [company, setCompany] = useState("");
   const [subscriptionTier, setSubscriptionTier] = useState("free");
   const [updateSuccess, setUpdateSuccess] = useState(false);
-  const supabase = createClient();
+  const supabaseClient = supabase; // Keep variable name for minimal changes
 
   useEffect(() => {
-    async function getUser() {
+    const fetchUser = async () => {
       const {
         data: { user },
-      } = await supabase.auth.getUser();
+      } = await supabaseClient.auth.getUser();
       if (user) {
         setUser(user);
         setFullName(user.user_metadata.full_name || "");
@@ -31,17 +31,17 @@ export default function SettingsPage() {
         setSubscriptionTier(user.user_metadata.subscription_tier || "free");
       }
       setLoading(false);
-    }
+    };
 
-    getUser();
-  }, [supabase.auth]);
+    fetchUser();
+  }, [supabaseClient.auth]);
 
   const handleUpdateProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
 
     try {
-      const { error } = await supabase.auth.updateUser({
+      const { error } = await supabaseClient.auth.updateUser({
         data: {
           full_name: fullName,
           company: company,
@@ -63,7 +63,7 @@ export default function SettingsPage() {
   };
 
   const handleSignOut = async () => {
-    await supabase.auth.signOut();
+    await supabaseClient.auth.signOut();
     router.push("/login");
     router.refresh();
   };

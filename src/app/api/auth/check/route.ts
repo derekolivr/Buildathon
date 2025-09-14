@@ -2,10 +2,9 @@ import { createServerClient } from "@supabase/ssr";
 import { cookies as nextCookies } from "next/headers";
 import { NextResponse } from "next/server";
 
-export async function POST() {
+export async function GET() {
     try {
         const cookieStore = await nextCookies();
-        const res = NextResponse.redirect(new URL("/login", process.env.NEXT_PUBLIC_URL || "http://localhost:3000"));
         const supabase = createServerClient(
             process.env.NEXT_PUBLIC_SUPABASE_URL!,
             process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -23,10 +22,27 @@ export async function POST() {
                 },
             }
         );
-        await supabase.auth.signOut();
-        return res;
-    } catch (error: unknown) {
-        console.error("Error during signout:", error);
-        return NextResponse.redirect(new URL("/login", process.env.NEXT_PUBLIC_URL || "http://localhost:3000"));
+        const {
+            data: { user },
+            error,
+        } = await supabase.auth.getUser();
+
+        if (error || !user) {
+            return NextResponse.json({ authenticated: false }, { status: 401 });
+        }
+
+        return NextResponse.json({
+            authenticated: true,
+            user: {
+                id: user.id,
+                email: user.email,
+            },
+        });
+    } catch (error) {
+        console.error("Auth check error:", error);
+        return NextResponse.json(
+            { authenticated: false, error: "Authentication check failed" },
+            { status: 500 }
+        );
     }
 }

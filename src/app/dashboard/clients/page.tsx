@@ -46,6 +46,7 @@ export default function ClientsPage() {
   const [clients, setClients] = useState<Client[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [clientToDelete, setClientToDelete] = useState<Client | null>(null);
+  const [isLoggedIn, setIsLoggedIn] = useState<boolean | null>(null);
   const [newClient, setNewClient] = useState({
     name: "",
     email: "",
@@ -54,8 +55,21 @@ export default function ClientsPage() {
   });
 
   useEffect(() => {
+    checkAuth();
     fetchClients();
   }, []);
+
+  const checkAuth = async () => {
+    try {
+      // Simple endpoint to check if we're authenticated
+      const res = await fetch("/api/auth/check");
+      setIsLoggedIn(res.ok);
+      console.log("Auth check:", res.ok ? "Logged in" : "Not logged in");
+    } catch (error) {
+      console.error("Auth check error:", error);
+      setIsLoggedIn(false);
+    }
+  };
 
   const fetchClients = async () => {
     try {
@@ -79,6 +93,19 @@ export default function ClientsPage() {
 
   const handleAddClient = async () => {
     try {
+      // Client-side validation
+      if (!newClient.name || newClient.name.trim() === "") {
+        alert("Client name is required");
+        return;
+      }
+
+      // Check authentication before submitting
+      if (isLoggedIn === false) {
+        alert("You are not logged in. Please log in and try again.");
+        window.location.href = "/login";
+        return;
+      }
+
       const res = await fetch("/api/clients", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -87,12 +114,18 @@ export default function ClientsPage() {
 
       if (res.ok) {
         setIsDialogOpen(false);
+        setNewClient({ name: "", email: "", phone: "", organization: "" }); // Reset form
         fetchClients(); // Refresh the list
       } else {
-        console.error("Failed to add client");
+        // Get detailed error message from response
+        const errorData = await res.json();
+        console.error("Failed to add client:", errorData.error || res.statusText);
+        alert(`Failed to add client: ${errorData.error || res.statusText}`);
       }
     } catch (error) {
-      console.error("Failed to add client", error);
+      const message = error instanceof Error ? error.message : "Unknown error";
+      console.error("Failed to add client:", message);
+      alert(`Failed to add client: ${message}`);
     }
   };
 
@@ -118,6 +151,18 @@ export default function ClientsPage() {
 
   return (
     <div className="space-y-6">
+      {isLoggedIn === false && (
+        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4" role="alert">
+          <strong className="font-bold">Authentication Error! </strong>
+          <span className="block sm:inline">You are not logged in. Please log in to manage clients.</span>
+          <button
+            className="bg-red-500 hover:bg-red-700 text-white font-bold py-1 px-4 rounded ml-4"
+            onClick={() => (window.location.href = "/login")}
+          >
+            Login
+          </button>
+        </div>
+      )}
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold tracking-tight">Clients</h1>
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>

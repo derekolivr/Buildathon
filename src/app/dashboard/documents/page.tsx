@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DocumentUploader } from "@/components/documents/document-uploader";
@@ -25,7 +25,7 @@ interface Document {
   created_at: string;
 }
 
-export default function DocumentsPage() {
+function DocumentsPageContent() {
   const searchParams = useSearchParams();
   const clientId = searchParams.get("clientId");
   const [client, setClient] = useState<Client | null>(null);
@@ -275,5 +275,13 @@ export default function DocumentsPage() {
         </TabsContent>
       </Tabs>
     </div>
+  );
+}
+
+export default function DocumentsPage() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center h-96">Loading...</div>}>
+      <DocumentsPageContent />
+    </Suspense>
   );
 }

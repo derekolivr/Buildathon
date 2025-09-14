@@ -1,34 +1,38 @@
-import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs";
-import { cookies } from "next/headers";
+import { createServerClient } from "@supabase/ssr";
+import { cookies as nextCookies } from "next/headers";
 import { NextResponse } from "next/server";
 
 export async function GET(request: Request) {
     try {
-        const { searchParams, origin } = new URL(request.url);
-        const code = searchParams.get("code");
-        const next = searchParams.get("next") ?? "/dashboard";
+        const requestUrl = new URL(request.url);
+        const code = requestUrl.searchParams.get("code");
+        const next = requestUrl.searchParams.get("next") ?? "/dashboard";
 
         if (code) {
-            // Create a new response to redirect to
-            const redirectUrl = new URL(`${origin}${next}`);
-            const response = NextResponse.redirect(redirectUrl);
-
-            // Create a Supabase client using the auth-helpers-nextjs
-            const supabase = createRouteHandlerClient(
-                { cookies }
+            const cookieStore = await nextCookies();
+            const supabase = createServerClient(
+                process.env.NEXT_PUBLIC_SUPABASE_URL!,
+                process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+                {
+                    cookies: {
+                        get(name: string) {
+                            return cookieStore.get(name)?.value;
+                        },
+                        set(name: string, value: string, options?: Parameters<NextResponse["cookies"]["set"]>[2]) {
+                            cookieStore.set({ name, value, ...options });
+                        },
+                        remove(name: string, options?: Parameters<NextResponse["cookies"]["set"]>[2]) {
+                            cookieStore.set({ name, value: "", ...options, maxAge: 0 });
+                        },
+                    },
+                }
             );
-
-            const { error } = await supabase.auth.exchangeCodeForSession(code);
-
-            if (!error) {
-                return response;
-            }
+            await supabase.auth.exchangeCodeForSession(code);
         }
+
+        return NextResponse.redirect(new URL(next, request.url));
     } catch (error: unknown) {
         console.error("Error in auth callback:", error);
-        const origin = new URL(request.url).origin;
-        return NextResponse.redirect(
-            `${origin}/login?error=Could not authenticate user`
-        );
+        return NextResponse.redirect(new URL("/login?error=Could not authenticate user", request.url));
     }
 }

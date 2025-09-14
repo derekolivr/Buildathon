@@ -1,3 +1,6 @@
+-- Enable required extension for gen_random_uuid()
+create extension if not exists pgcrypto;
+
 -- Clients
 create table if not exists public.clients (
   id uuid primary key default gen_random_uuid(),
@@ -27,17 +30,32 @@ create table if not exists public.messages (
   client_id uuid not null references public.clients(id) on delete cascade,
   channel text not null,
   body text not null,
-  status text default queued,
+  status text default 'queued',
   scheduled_at timestamp with time zone,
   created_at timestamp with time zone default now()
 );
 
--- Basic RLS setup (optional, enable if using RLS)
--- alter table public.clients enable row level security;
--- alter table public.documents enable row level security;
--- alter table public.messages enable row level security;
+-- Basic RLS setup
+alter table if exists public.clients enable row level security;
 
--- Example policies (adjust as needed)
--- create policy "clients_access" on public.clients for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
--- create policy "documents_access" on public.documents for all using (exists(select 1 from public.clients c where c.id = client_id and c.user_id = auth.uid())) with check (exists(select 1 from public.clients c where c.id = client_id and c.user_id = auth.uid()));
--- create policy "messages_access" on public.messages for all using (exists(select 1 from public.clients c where c.id = client_id and c.user_id = auth.uid())) with check (exists(select 1 from public.clients c where c.id = client_id and c.user_id = auth.uid()));
+-- Minimal policies for clients table (own-row access)
+create policy if not exists "clients_select_own" on public.clients
+for select
+using (auth.uid() = user_id);
+
+create policy if not exists "clients_insert_own" on public.clients
+for insert
+with check (auth.uid() = user_id);
+
+create policy if not exists "clients_update_own" on public.clients
+for update
+using (auth.uid() = user_id)
+with check (auth.uid() = user_id);
+
+create policy if not exists "clients_delete_own" on public.clients
+for delete
+using (auth.uid() = user_id);
+
+
+-- If you just created tables, reload PostgREST schema cache
+-- select pg_notify('pgrst', 'reload schema');

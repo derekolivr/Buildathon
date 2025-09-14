@@ -1,12 +1,8 @@
-import { createServerClient, type CookieOptions } from "@supabase/ssr";
+import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 export async function middleware(request: NextRequest) {
-    let response = NextResponse.next({
-        request: {
-            headers: request.headers,
-        },
-    });
+    const res = NextResponse.next();
 
     const supabase = createServerClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -16,39 +12,11 @@ export async function middleware(request: NextRequest) {
                 get(name: string) {
                     return request.cookies.get(name)?.value;
                 },
-                set(name: string, value: string, options: CookieOptions) {
-                    request.cookies.set({
-                        name,
-                        value,
-                        ...options,
-                    });
-                    response = NextResponse.next({
-                        request: {
-                            headers: request.headers,
-                        },
-                    });
-                    response.cookies.set({
-                        name,
-                        value,
-                        ...options,
-                    });
+                set(name: string, value: string, options: Parameters<NextResponse["cookies"]["set"]>[2]) {
+                    res.cookies.set({ name, value, ...options });
                 },
-                remove(name: string, options: CookieOptions) {
-                    request.cookies.set({
-                        name,
-                        value: "",
-                        ...options,
-                    });
-                    response = NextResponse.next({
-                        request: {
-                            headers: request.headers,
-                        },
-                    });
-                    response.cookies.set({
-                        name,
-                        value: "",
-                        ...options,
-                    });
+                remove(name: string, options: Parameters<NextResponse["cookies"]["set"]>[2]) {
+                    res.cookies.set({ name, value: "", ...options, maxAge: 0 });
                 },
             },
         }
@@ -58,7 +26,9 @@ export async function middleware(request: NextRequest) {
         data: { session },
     } = await supabase.auth.getSession();
 
-    const isAuthRoute = request.nextUrl.pathname === "/login" || request.nextUrl.pathname === "/reset-password";
+    const isAuthRoute =
+        request.nextUrl.pathname === "/login" ||
+        request.nextUrl.pathname === "/reset-password";
     const isProtectedRoute = request.nextUrl.pathname.startsWith("/dashboard");
 
     if (!session && isProtectedRoute) {
@@ -69,7 +39,7 @@ export async function middleware(request: NextRequest) {
         return NextResponse.redirect(new URL("/dashboard", request.url));
     }
 
-    return response;
+    return res;
 }
 
 export const config = {
