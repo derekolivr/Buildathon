@@ -5,7 +5,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Upload, Loader2 } from "lucide-react";
 
-export function DocumentUploader() {
+interface DocumentUploaderProps {
+  clientId?: string;
+  onUploaded?: (document: { id: string; file_name: string; storage_url: string; created_at: string }) => void;
+}
+
+export function DocumentUploader({ clientId, onUploaded }: DocumentUploaderProps) {
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [processing, setProcessing] = useState(false);
@@ -17,21 +22,24 @@ export function DocumentUploader() {
   };
 
   const handleUpload = async () => {
-    if (!file) return;
+    if (!file || !clientId) return;
 
     try {
       setUploading(true);
-      // Simulate upload
-      await new Promise((resolve) => setTimeout(resolve, 1500));
+      const form = new FormData();
+      form.append("file", file);
+      form.append("client_id", clientId);
+      const res = await fetch("/api/documents", {
+        method: "POST",
+        body: form,
+      });
       setUploading(false);
       setProcessing(true);
-      // Simulate AI processing
-      await new Promise((resolve) => setTimeout(resolve, 2000));
+      if (!res.ok) throw new Error("Upload failed");
+      const data = await res.json();
       setProcessing(false);
-      // Reset
       setFile(null);
-      // Show success notification
-      alert("Document processed successfully!");
+      onUploaded?.(data.document);
     } catch (error) {
       console.error("Error uploading document:", error);
       setUploading(false);
@@ -46,7 +54,7 @@ export function DocumentUploader() {
         <p className="text-xs text-muted-foreground">Supported formats: PDF, DOC, DOCX, JPG, PNG</p>
       </div>
       <div className="flex items-center gap-4">
-        <Button onClick={handleUpload} disabled={!file || uploading || processing} className="w-full">
+        <Button onClick={handleUpload} disabled={!file || uploading || processing || !clientId} className="w-full">
           {uploading ? (
             <>
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -55,12 +63,12 @@ export function DocumentUploader() {
           ) : processing ? (
             <>
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Processing with AI...
+              Finalizing...
             </>
           ) : (
             <>
               <Upload className="mr-2 h-4 w-4" />
-              Upload & Process
+              Upload
             </>
           )}
         </Button>
