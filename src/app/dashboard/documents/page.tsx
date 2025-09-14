@@ -5,10 +5,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DocumentUploader } from "@/components/documents/document-uploader";
 import { DocumentList } from "@/components/documents/document-list";
-import { FileText } from "lucide-react";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-// No longer needed for this component
-// import { supabaseClient } from "@/lib/supabaseClient";
+import { FileText, ArrowLeft } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { useSearchParams } from "next/navigation";
+import Link from "next/link";
 
 interface Client {
   id: string;
@@ -26,10 +26,11 @@ interface Document {
 }
 
 export default function DocumentsPage() {
-  const [clients, setClients] = useState<Client[]>([]);
-  const [selectedClientId, setSelectedClientId] = useState<string>("");
+  const searchParams = useSearchParams();
+  const clientId = searchParams.get("clientId");
+  const [client, setClient] = useState<Client | null>(null);
   const [documents, setDocuments] = useState<Document[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(true);
   const [stats, setStats] = useState({
     total: 0,
     processed: 0,
@@ -37,43 +38,35 @@ export default function DocumentsPage() {
   });
 
   useEffect(() => {
-    fetchClients();
-  }, []);
-
-  useEffect(() => {
-    if (selectedClientId) {
-      fetchDocuments(selectedClientId);
+    if (clientId) {
+      fetchClient(clientId);
+      fetchDocuments(clientId);
+    } else {
+      setIsLoading(false);
     }
-  }, [selectedClientId]);
+  }, [clientId]);
 
-  const fetchClients = async () => {
+  const fetchClient = async (id: string) => {
     try {
-      const res = await fetch("/api/clients");
-      if (!res.ok) throw new Error("Failed to fetch clients");
+      const res = await fetch(`/api/clients?id=${id}`);
+      if (!res.ok) throw new Error("Failed to fetch client");
       const data = await res.json();
-      setClients(data.clients || []);
-
-      // Select the first client by default if available
-      if (data.clients?.length > 0) {
-        setSelectedClientId(data.clients[0].id);
-      }
+      setClient(data);
     } catch (error) {
-      console.error("Error fetching clients:", error);
-    } finally {
-      setLoading(false);
+      console.error("Error fetching client:", error);
     }
   };
 
   const fetchDocuments = async (clientId: string) => {
     try {
-      setLoading(true);
+      setIsLoading(true);
       const res = await fetch(`/api/documents?client_id=${clientId}`);
       if (!res.ok) throw new Error("Failed to fetch documents");
       const data = await res.json();
-      setDocuments(data.documents || []);
+      setDocuments(data || []);
 
       // Update stats
-      const docs = data.documents || [];
+      const docs = data || [];
       const processed = docs.filter(
         (doc: Document) => doc.extracted_fields && Object.keys(doc.extracted_fields).length > 0
       ).length;
@@ -86,7 +79,7 @@ export default function DocumentsPage() {
     } catch (error) {
       console.error("Error fetching documents:", error);
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
   };
 
@@ -111,7 +104,7 @@ export default function DocumentsPage() {
       const data = await res.json();
 
       // Update the document in the list
-      setDocuments((docs) => docs.map((doc) => (doc.id === docId ? data.document : doc)));
+      setDocuments((docs) => docs.map((doc) => (doc.id === docId ? data : doc)));
 
       // Update stats
       setStats((prev) => ({
@@ -127,27 +120,41 @@ export default function DocumentsPage() {
     }
   };
 
+  if (!clientId) {
+    return (
+      <div className="flex flex-col items-center justify-center h-96 space-y-4">
+        <h1 className="text-2xl font-bold">No Client Selected</h1>
+        <p className="text-muted-foreground">Please select a client from the clients page to view their documents.</p>
+        <Button asChild>
+          <Link href="/dashboard/clients">
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Go to Clients
+          </Link>
+        </Button>
+      </div>
+    );
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-96">
+        <p className="text-muted-foreground">Loading client documents...</p>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold tracking-tight">Documents</h1>
-        <Select value={selectedClientId} onValueChange={setSelectedClientId}>
-          <SelectTrigger className="w-[200px]">
-            <SelectValue placeholder="Select Client" />
-          </SelectTrigger>
-          <SelectContent>
-            {clients.map((client) => (
-              <SelectItem key={client.id} value={client.id}>
-                {client.name} {client.organization ? `(${client.organization})` : ""}
-              </SelectItem>
-            ))}
-            {clients.length === 0 && (
-              <SelectItem value="none" disabled>
-                No clients available
-              </SelectItem>
-            )}
-          </SelectContent>
-        </Select>
+        <div className="flex items-center space-x-4">
+          <Button variant="outline" size="sm" asChild>
+            <Link href="/dashboard/clients">
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Back to Clients
+            </Link>
+          </Button>
+          <h1 className="text-3xl font-bold tracking-tight">{client ? `${client.name}'s Documents` : "Documents"}</h1>
+        </div>
       </div>
       <Tabs defaultValue="all" className="space-y-4">
         <TabsList>
@@ -166,7 +173,7 @@ export default function DocumentsPage() {
               <CardContent>
                 <div className="text-2xl font-bold">{stats.total}</div>
                 <p className="text-xs text-muted-foreground">
-                  {stats.total > 0 ? `For ${clients.find((c) => c.id === selectedClientId)?.name}` : "No documents yet"}
+                  {stats.total > 0 ? `For ${client?.name || "client"}` : "No documents yet"}
                 </p>
               </CardContent>
             </Card>
@@ -196,14 +203,14 @@ export default function DocumentsPage() {
             </Card>
           </div>
           <div className="grid gap-6 md:grid-cols-1">
-            {selectedClientId && (
+            {clientId && (
               <Card>
                 <CardHeader>
                   <CardTitle>Upload Document</CardTitle>
                   <CardDescription>Upload a document for AI-powered processing and form filling</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <DocumentUploader clientId={selectedClientId} onUploaded={handleDocumentUploaded} />
+                  <DocumentUploader clientId={clientId} onUploaded={handleDocumentUploaded} />
                 </CardContent>
               </Card>
             )}
@@ -213,7 +220,7 @@ export default function DocumentsPage() {
                 <CardDescription>Your recently processed documents</CardDescription>
               </CardHeader>
               <CardContent>
-                <DocumentList clientId={selectedClientId} documents={documents} onAutofill={handleAutofill} />
+                <DocumentList clientId={clientId} documents={documents} onAutofill={handleAutofill} />
               </CardContent>
             </Card>
           </div>
@@ -226,7 +233,7 @@ export default function DocumentsPage() {
             </CardHeader>
             <CardContent>
               <DocumentList
-                clientId={selectedClientId}
+                clientId={clientId}
                 documents={documents.filter((doc) => doc.file_name.toLowerCase().includes("form"))}
                 type="forms"
                 onAutofill={handleAutofill}
@@ -242,7 +249,7 @@ export default function DocumentsPage() {
             </CardHeader>
             <CardContent>
               <DocumentList
-                clientId={selectedClientId}
+                clientId={clientId}
                 documents={documents.filter((doc) => doc.file_name.toLowerCase().includes("policy"))}
                 type="policies"
                 onAutofill={handleAutofill}
@@ -258,7 +265,7 @@ export default function DocumentsPage() {
             </CardHeader>
             <CardContent>
               <DocumentList
-                clientId={selectedClientId}
+                clientId={clientId}
                 documents={documents.filter((doc) => doc.file_name.toLowerCase().includes("claim"))}
                 type="claims"
                 onAutofill={handleAutofill}

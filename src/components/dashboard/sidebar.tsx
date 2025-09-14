@@ -12,6 +12,7 @@ import {
   Cog,
   LogOut,
   Settings,
+  Users,
 } from "lucide-react";
 
 const navItems = [
@@ -19,6 +20,11 @@ const navItems = [
     title: "Dashboard",
     href: "/dashboard",
     icon: LayoutDashboard,
+  },
+  {
+    title: "Clients",
+    href: "/dashboard/clients",
+    icon: Users,
   },
   {
     title: "Documents",
