@@ -21,7 +21,7 @@ from google.colab import files
 # --- Groq API Config (hardcoded as requested — do not share/commit this) ---
 import requests
 
-GROQ_API_KEY = "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"  # WARNING: hardcoding keys is insecure
+GROQ_API_KEY = ""  # WARNING: hardcoding keys is insecure
 LLAMA_MODEL_NAME = "meta-llama/llama-4-maverick-17b-128e-instruct"
 GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 
