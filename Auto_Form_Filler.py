@@ -19,7 +19,7 @@ import platform
 
 
 # --- Groq API Config ---
-GROQ_API_KEY = "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"
+GROQ_API_KEY = "GROQ API KEY"
 LLAMA_MODEL_NAME = "meta-llama/llama-4-maverick-17b-128e-instruct"
 GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 
